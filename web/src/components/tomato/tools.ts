@@ -26,10 +26,10 @@ function doFadeIn(audio: HTMLAudioElement) {
   if (fadeInterval) clearInterval(fadeInterval)
   fadeInterval = setInterval(() => {
     if (audio.volume < 0.95) {
-      audio.volume += 0.05
+      audio.volume += 0.01
     } else {
       audio.volume = 1
       clearInterval(fadeInterval)
     }
-  }, 1000)
+  }, 300)
 }
