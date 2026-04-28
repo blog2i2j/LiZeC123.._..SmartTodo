@@ -11,9 +11,9 @@ class LLMClient:
         base_url, api_key = config_manager.get_llm_info()
         self.client = OpenAI(api_key=api_key, base_url=base_url)
 
-    def generate_stream(self, history: List[ChatCompletionMessageParam]) -> Generator[str, Any, None]:
+    def generate_stream(self, history: List[ChatCompletionMessageParam], /, model="deepseek-ai/DeepSeek-V4-Flash") -> Generator[str, Any, None]:
         response = self.client.chat.completions.create(
-            model="deepseek-ai/DeepSeek-V3.2",
+            model=model,
             messages=history,
             stream=True,
         )
