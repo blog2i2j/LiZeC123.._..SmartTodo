@@ -1,6 +1,6 @@
 import type { TodoType, CreateItem, TodoPriority } from './types'
 
-// 解析输入的代办事项文本, 根据文本内容附带必要的属性
+// 解析输入的待办事项文本, 根据文本内容附带必要的属性
 export function parseTitleToData(todoContent: string, priority: TodoPriority) {
   const values = todoContent.split(' ')
 
@@ -82,7 +82,7 @@ function inferNoteType(name: string): boolean {
     // 当前的关键词有可能在标题中作为动词使用, 此时大概率并不期望创建Note
     // 因此调整为关键词必须结尾出现, 此时相关词汇更大概率为名词
     if (name.endsWith(type)) {
-      return confirm('检测到代办类型包含关键词, 是否按照便签类型进行创建?')
+      return confirm('检测到便签类型关键词, 是否按照便签类型进行创建?')
     }
   }
 

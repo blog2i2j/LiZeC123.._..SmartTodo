@@ -2,7 +2,7 @@
   <TodoSubmit :enableSubmit="true" @commit="doCommitTodo"></TodoSubmit>
 
   <div class="container">
-    <!-- 代办事项模块 -->
+    <!-- 待办事项模块 -->
     <ItemList title="今日任务" :btnCfg="tCfg" :data="tTask" @done="(idx, id) => incTime(tTask)(idx, id)"
       @item-click="itemClick" @header-click="openTomatoPage">
     </ItemList>

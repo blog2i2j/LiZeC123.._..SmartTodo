@@ -41,7 +41,7 @@ const emit = defineEmits<{
 }>()
 
 function gotoHome() {
-  document.title = '代办事项列表'
+  document.title = '待办事项列表'
   router.push({ path: '/todo' })
 }
 
