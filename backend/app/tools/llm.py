@@ -19,6 +19,6 @@ class LLMClient:
         )
 
         for chunk in response:
-            if chunk.choices[0].delta.content is not None:
+            if len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
                 data = chunk.choices[0].delta.content
                 yield data

@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 from dataclasses import dataclass
 import random
-from typing import Any, Dict, Generator, List
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
+from app.models.tomato import TomatoTaskRecord
 from app.services.event_log_manager import get_event_log_after
 from app.services.item_manager import ItemManager
 from app.services.tomato_manager import TomatoManager, TomatoRecordManager
@@ -43,6 +44,11 @@ class UserMemory:
         return {"time": now_str()}
     
     def get_last_chat_time(self) ->datetime:
+        # 如果只有系统提示词, 等于没有消息, 设置起始时间为今天的开始
+        if len(self.messages) == 1:
+            return today_begin()
+        
+        # 否则读取上一条消息的时间
         v = self.messages[-1]
         d = v.meta.get("time")
         if d is None:
@@ -128,43 +134,26 @@ class AssistantManager:
     def make_system_prompt(self, owner: str) -> str:
         role_info = self.get_role_info(self.get_role_list(), self.role_keyword)
         task_table = self.get_task_info(owner)
-        event_table = self.get_event_info(owner, today_begin())
-        if event_table == "":
-            event_table = "当前用户还未完成任何事项"
-        
 
         return f'''### 角色设定
 
-你是我的个人代办事项管理助理. {role_info}
+你是个人待办事项管理助理. {role_info}
 
-### 用户的工作时间表
+### 用户的工作模式
 
-| 时段     | 起止时间      | 番茄钟数量 |
-| -------- | ------------- | ---------- |
-| 早间准备  | 9:00 ~ 9:20   | 准备时间无需番茄钟 |
-| 上午     | 9:20 ~ 11:20  | 4个        |
-| 午间休息  | 11:20 ~ 14:20 | /   |
-| 下午1    | 14:20 ~ 16:20 | 4个        |
-| 下午休息 | 16:20 ~ 16:40 | /   |
-| 下午2    | 16:40 ~ 17:40 | 2个        |
-| 晚间休息  | 17:40 ~ 19:00 | /   |
-| 晚上     | 19:00 ~ 20:00 | 2个        |
-| 晚上sp   | 20:00 ~ 21:00 | 根据完成情况决定工作或休息 |
+用户采用番茄工作法, 在 工作 -> 休息 -> 规划 三个状态中循环, 每个番茄钟包含25分钟的工作时间, 5分钟的休息之间以及两个番茄钟之间的规划时间. 每4个番茄钟为一个大组, 完成一个大组后有额外的15分钟休息时间. 
 
-> 每天晚上21点至第二天9点为休息时间, 不用于完成规划的任务
+每天的11:30~14:30为午休时间, 17:30~19:00为晚餐时间, 这两个时段为休息状态, 并将全天分割为上午, 下午和晚上. 用户晚上21:00后进入休息状态, 在大约23:00准备睡觉.
 
-### 用户今日规划的代办事项
+### 用户今日规划的待办事项
 {task_table}
 
 > 部分任务(例如打卡)仅需要完成, 但无需番茄钟
 
-### 用户截止当前时间的事件记录
-{event_table}
-
 ### 关键注意事项
 
-1. 根据用户的作息时间表和今天的规划, 结合用户的事件记录评估当前的完成情况
-2. 一个番茄钟的周期是工作25分钟后休息5分钟, 结合当前时间判断工作和休息状态
+1. 在用户的对话前有系统插入的当前状态信息, 包含当前时间, 番茄钟状态, 任务完成情况等信息.
+2. 当前状态为工作时, 话题围绕当前工作项. 当前状态为休息时, 按照人设和用户对话进行闲聊. 当前状态为规划状态时, 可闲聊并讨论后续任务规划. 
 3. 每次回复需要至少200字
 '''
 
@@ -173,12 +162,13 @@ class AssistantManager:
         
         event_info = self.get_event_info(owner, start)
         if event_info != "":
-            content = "用户截止当前时间的事件记录:\n" + event_info
+            content += "用户新增的事件记录:\n" + event_info
                 
-        # 当前番茄钟情况(如果有)
-        state = self.tomato_manager.query_task(owner)
+        # 当前番茄钟状态
+        begin_time, begin_state = self.get_tomato_state_begin_time()
+        state = self.get_tomato_state(owner=owner, begin_time=begin_time, begin_state=begin_state)
         if state is not None:
-            content += f"用户当前正在进行的番茄钟: {state.name} 开始时间: {get_hour_str_from(state.start_time)}\n"
+            content += f"用户番茄钟状态: {state}\n"
         
         # 用户可以不输入任何内容, 全部使用自动填充的信息
         if prompt != "":
@@ -239,6 +229,91 @@ class AssistantManager:
             content += f"{get_hour_str_from(e.create_time)}: {e.msg}\n"        
         
         return content
+    
+    def get_tomato_state_begin_time(self) -> Tuple[datetime, str]:
+        now_time = now()
+        today_morning_start = datetime(now_time.year, now_time.month, now_time.day, 8, 0, 0) 
+        today_morning_end = datetime(now_time.year, now_time.month, now_time.day, 12, 0, 0)
+        today_afternoon_end = datetime(now_time.year, now_time.month, now_time.day, 18, 0, 0)
+        
+        if now_time < today_morning_end:
+            return today_morning_start, '上午'
+        
+        if now_time < today_afternoon_end:
+            return today_morning_end, '下午'
+        
+        return today_afternoon_end, '晚上'
+    
+    def check_rest_time(self) -> str:
+        now_time = now()
+        noon_rest_start = datetime(now_time.year, now_time.month, now_time.day, 11, 30, 0) 
+        noon_rest_end = datetime(now_time.year, now_time.month, now_time.day, 14, 30, 0) 
+        
+        evening_start = datetime(now_time.year, now_time.month, now_time.day, 17, 30, 0) 
+        evening_end = datetime(now_time.year, now_time.month, now_time.day, 19, 00, 0) 
+        
+        night_start = datetime(now_time.year, now_time.month, now_time.day, 21, 00, 0)
+        
+        if noon_rest_start < now_time < noon_rest_end:
+            return "午间休息时间"
+        
+        if evening_start < now_time < evening_end:
+            return "晚间休息时间"
+        
+        if now_time > night_start:
+            return "深夜休息时间"
+        
+        return ""
+
+    
+    def get_tomato_state(self, owner: str, begin_time: datetime, begin_state: str) -> str:
+        # 首先检查是否是番茄钟工作状态, 该状态优先级最高, 因此用户实际上可以在任意时间开始番茄钟
+        state = self.tomato_manager.query_task(owner=owner)
+        if state:
+            last_group_cnt, last_tomato_cnt, _ = self.get_tomoto_record_info(owner=owner, begin_time=begin_time)
+            remain_minutes = (state.start_time + timedelta(minutes=25) - now()).total_seconds()
+            return f"正在进行{begin_state}第{last_group_cnt+1}组番茄钟内的第{last_tomato_cnt+1}个番茄钟, 当前为工作状态, 工作项目为[{state.name}], 工作时间剩余{remain_minutes}分钟\n"
+
+        # 其次检查是否为休息时间, 相当于可以覆盖番茄钟的休息和规划状态
+        reset_time = self.check_rest_time()
+        if reset_time != "":
+            return reset_time
+        
+        # 当前不是番茄钟状态, 先检查是否为初始状态
+        last_group_cnt, last_tomato_cnt, last_record = self.get_tomoto_record_info(owner=owner, begin_time=begin_time)
+        if last_record is None:
+            # 没有开始任何番茄钟
+            return f"还未开始任何番茄钟\n"
+        
+        # 不是初始状态, 再检查休息和规划状态
+        remain_minutes = (now() - last_record.finish_time).total_seconds() / 60
+        # 如果上一个番茄钟是一组里的最后一个番茄钟, 则需要进行组之间的休息时间判断
+        if last_tomato_cnt == 0:
+            if remain_minutes < 20:
+                return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟, 当前为大组之间的休息时间, 剩余{20 - remain_minutes}分钟\n"
+            else:
+                return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟, 已完成大组之间的休息, 当前进入规划状态, 已持续{remain_minutes - 20}分钟\n"
+        
+        # 如果不是最后一个番茄钟
+        if remain_minutes < 5:
+            # 休息时间不注入任务名, 该部分信息已经包含在事件列表中
+            # 进入这个状态是已经把当前番茄钟的记录写入, 因此无需再+1了
+            return f"正在进行{begin_state}第{last_group_cnt+1}组番茄钟内的第{last_tomato_cnt}个番茄钟, 当前为休息状态, 休息时间剩余{remain_minutes / 60}分钟\n"
+        else:
+            return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟内的第{last_tomato_cnt}个番茄钟, 当前进入规划状态, 已持续{remain_minutes - 5}分钟\n"
+        
+    
+    def get_tomoto_record_info(self, owner: str, begin_time:datetime) -> Tuple[int, int, Optional[TomatoTaskRecord]]:
+        tomato_records = self.tomato_record_manager.select_record_after(owner=owner, time=begin_time)
+        record_cnt = len(tomato_records)
+        
+        if record_cnt == 0:
+            return 0,0, None
+        
+        last_group_cnt = record_cnt // 4
+        last_tomato_cnt = record_cnt % 4
+        return last_group_cnt, last_tomato_cnt, tomato_records[-1]
+                  
 
     def get_web_history(self, owner:str) -> List[str]:
         m_list = self.get_memory(owner).messages

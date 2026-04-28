@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from itertools import groupby
 from typing import Dict, Optional, Sequence, Callable, List
 
@@ -161,7 +161,7 @@ class TomatoRecordManager:
     #     items = self.db.execute(stmt).all()
     #     return list(sorted(items, key=lambda x: x[1], reverse=True))
 
-    def select_record_after(self, owner: str, time) -> Sequence[TomatoTaskRecord]:
+    def select_record_after(self, owner: str, time: datetime) -> Sequence[TomatoTaskRecord]:
         stmt = sal.select(TomatoTaskRecord) \
             .where(TomatoTaskRecord.owner == owner, TomatoTaskRecord.finish_time > time) \
             .order_by(TomatoTaskRecord.id.asc())
