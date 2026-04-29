@@ -21,7 +21,7 @@
 <script setup lang="ts">
 import MusicBase from './M01.mp3'
 import MusicShort from './S01.mp3'
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import type { TomatoEventType, TomatoItem, TomatoParam } from './types'
 import { OneMinuteMS } from './types'
 
@@ -40,12 +40,17 @@ let rs = ref(0)
 // 当前计时器
 let timer: number | undefined = undefined
 
+// 番茄钟计数结束标记
+let hasTomatoFinished: boolean = true
+
 // 监听item重置行为
 watch(
   () => props.item,
   () => {
+    clearInterval(timer)  // 始终先清除之前可能存在的定时器, 然后再开启新的定时器
     if (props.item !== undefined) {
       timer = setInterval(updateTomato, 500)
+      hasTomatoFinished = false
     }
   },
 )
@@ -60,8 +65,10 @@ function updateTomato() {
   // 更新剩余时间, 驱动页面刷新
   rs.value = calcRS(props.item)
 
-  // 倒计时结束, 清除计时器
-  if (rs.value < 0) {
+  // 倒计时结束且当且是未结束状态, 则触发结束动作
+  if (rs.value < 0 && !hasTomatoFinished) {
+    // 立即标记为结束状态, 避免定时器堆积时产生多次提交操作
+    hasTomatoFinished = true
     finishTask('auto')
   }
 }
@@ -93,6 +100,14 @@ function calcRS(item: TomatoItem) {
   // console.log(item.startTime, new Date(item.startTime))
   return (finishedSecond - tsNow) / 1000
 }
+
+// 页面卸载时强制清理定时器
+// 如果当前页面正在进行倒计时, 直接push切换页面后, 定时器并不会自动销毁
+// 因此不手动清理, 后续用户再次打开番茄钟页面, 可能会产生两个定时器进行倒计时, 进而导致两次提交
+onUnmounted(() => {
+  clearInterval(timer)
+})
+
 </script>
 
 <style scoped>
