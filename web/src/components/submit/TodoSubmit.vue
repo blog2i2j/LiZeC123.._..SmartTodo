@@ -42,11 +42,11 @@ const emit = defineEmits<{
 
 function gotoHome() {
   document.title = '待办事项列表'
-  router.push({ path: '/todo' })
+  router.push({ path: '/' })
 }
 
-let todoContent = ref('')
-let priority: Ref<TodoPriority> = ref("p1")
+const todoContent = ref('')
+const priority: Ref<TodoPriority> = ref("p1")
 
 function commitTodo() {
   const content = todoContent.value.trim()
@@ -70,6 +70,7 @@ function commitTodo() {
 
   // 提交请求后直接清空内容, 而不必等待请求返回, 提高响应速度, 避免重复提交
   todoContent.value = ''
+  priority.value = "p1"
 }
 </script>
 
