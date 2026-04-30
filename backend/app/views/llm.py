@@ -16,6 +16,8 @@ def assistant_chat_stream(owner: str):
     
     if prompt == "/remake":
         g = assistant_manager.remake(owner)
+    elif prompt.startswith("/rr "):
+        g = assistant_manager.replace_role(prompt[4:], owner)
     elif prompt.startswith("/replace "):
         g = assistant_manager.replace(prompt[9:], owner)
     elif prompt == "/dump":

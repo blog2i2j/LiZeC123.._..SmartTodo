@@ -160,6 +160,12 @@ const sendMessage = async () => {
     return
   }
 
+  if (prompt.startsWith('/rr ')) {
+    addMessage('user', '[用户切换了助理角色]')
+    await streamChat(prompt)
+    return
+  }
+
   if (prompt === '/remake') {
     messages.pop()
     await streamChat(prompt)

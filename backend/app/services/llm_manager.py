@@ -130,6 +130,12 @@ class AssistantManager:
         self.memory.pop(owner)
         self.role_keyword = role_keyword
         return True
+    
+    def replace_role(self, keyword: str, owner: str) -> Generator[str, Any, None]:
+        memory = self.get_memory(owner)
+        prompt = self.make_replace_role_prompt(keyword)
+        memory.add_user_prompt(prompt)
+        return self.generate(memory)
 
     def make_system_prompt(self, owner: str) -> str:
         role_info = self.get_role_info(self.get_role_list(), self.role_keyword)
@@ -178,6 +184,10 @@ class AssistantManager:
         return content
 
 
+    def make_replace_role_prompt(self, keyword: str) -> str:
+        role_info = self.get_role_info(self.get_role_list(), keyword)
+        return f"{role_info}. 现在由你接替之前的个人助理"
+
     def get_role_list(self) -> List[str]:
         try:
             with open("config/role/Assistant.md") as f:
@@ -189,10 +199,6 @@ class AssistantManager:
     def get_role_info(self, roles: List[str], role_keyword: str) -> str:
         if len(roles) == 0:
             return ""
-        
-        print(role_keyword)
-        for role in roles:
-            print(role_keyword in role)
         
         random_role = random.choice(roles)
         if role_keyword == "":
