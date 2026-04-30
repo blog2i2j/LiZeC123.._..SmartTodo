@@ -86,6 +86,11 @@ const tCfg = [
     f: (_: number, id: string) => {
       axios.post('/tomato/setTask', { id }).then(() => {
         loadTomato()
+        // 由于列表可能很长, 因此如果启动番茄钟成功, 则滚动到顶部, 以便于用户感知到当前启动的番茄钟
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth" // 平滑滚动，去掉就是瞬间跳回顶部
+        })
       })
     }
   }
