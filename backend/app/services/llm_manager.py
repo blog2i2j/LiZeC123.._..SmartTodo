@@ -1,8 +1,10 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
-
-from dataclasses import dataclass
+import queue
 import random
+import threading
+import time
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from app.models.tomato import TomatoTaskRecord
@@ -10,6 +12,7 @@ from app.services.event_log_manager import get_event_log_after
 from app.services.item_manager import ItemManager
 from app.services.tomato_manager import TomatoManager, TomatoRecordManager
 from app.tools.llm import LLMClient
+from app.tools.log import logger
 from app.tools.time import get_datetime_from_str, get_hour_str_from, now, now_str, today_begin
 
 from openai.types.chat import ChatCompletionMessageParam
@@ -89,21 +92,65 @@ class AssistantManager:
         return m
     
     def generate(self, memory: UserMemory) -> Generator[str, Any, None]:
+        """流式生成回复：后台消费 LLM 流并保存，前台推送给客户端"""
         history = memory.get_history()
-        stream = self.llm_manager.generate_stream(history)
-        answer = []
-        # 读取数据流, 在本地记录的同时返回流给上层
+        stream = self.llm_manager.generate_stream(history)   
+        q = queue.Queue()                                    
+
+        # 启动后台消费者线程
+        thread = threading.Thread(
+            target=self._consume_llm_stream,
+            args=(stream, q, memory)
+        )
+        thread.start()
+        
+        # 从队列中获取数据并推送给客户端
+        yield from self._queue_to_generator(q)
+    
+
+
+    def _consume_llm_stream(self, stream, q: queue.Queue, memory: UserMemory):
+        """后台线程函数：完整消费 LLM 生成器，将 token 放入队列，最后保存答案到 memory"""
+        full_answer = []
         try:
             for token in stream:
-                answer.append(token)
-                yield f"data: {json.dumps({'text': token, 'done': False})}\n\n"
-            yield f"data: {json.dumps({'text': '', 'done': True})}\n\n"
+                full_answer.append(token)
+                q.put(token)          # 主线程会从队列中取走并发送
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e), 'done': True})}\n\n"
-        
-        # 流读取结束后, 将内容写入到记忆列表
-        memory.add_assistant_prompt("".join(answer))
-            
+            logger.error(f"消费LLM模型返回消息异常: {e}")
+        finally:
+            # 无论是完成成功还是部分成功, 结果还是要写入
+            memory.add_assistant_prompt("".join(full_answer))
+            # 哨兵，通知主线程流已结束
+            q.put(None)              
+
+
+    def _queue_to_generator(self, q: queue.Queue, timeout: float = 0.05) -> Generator[str, Any, None]:
+        """
+        从队列中读取 token 并生成 SSE 事件流。
+        处理客户端断开（GeneratorExit）和队列空的情况。
+        """
+        try:
+            while True:
+                try:
+                    token = q.get(timeout=timeout)
+                    if token is None:   # 收到哨兵，表示后台线程已结束
+                        yield f"data: {json.dumps({'text': '', 'done': True})}\n\n"
+                        break
+                    yield f"data: {json.dumps({'text': token, 'done': False})}\n\n"
+                except queue.Empty:
+                    # 队列空时短暂休眠，让出 CPU，
+                    # 理论上应该同时保持对 GeneratorExit 的响应, yield一个空包给客户端, 但是考虑到这种情况出现概率很小, 先不处理
+                    time.sleep(0.01)
+        except GeneratorExit as e:
+            # 客户端断开连接，不等待队列，直接退出（后台线程会继续完成记录）
+            logger.error(f'推送LLM模型消息到客户端中断: {e}')
+            return
+        except Exception as e:
+            # 发生其他异常时，先尝试发送错误信息（如果客户端还在）
+            logger.error(f'推送LLM模型消息到客户端异常: {e}')
+            yield f"data: {json.dumps({'error': str(e), 'done': True})}\n\n"        
+                
     def chat(self, prompt: str, owner: str) ->  Generator[str, Any, None]:
         memory = self.get_memory(owner)
         start = memory.get_last_chat_time()
