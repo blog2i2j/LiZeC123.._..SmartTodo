@@ -339,21 +339,21 @@ class AssistantManager:
             return f"还未开始任何番茄钟\n"
         
         # 不是初始状态, 再检查休息和规划状态
-        remain_minutes = (now() - last_record.finish_time).total_seconds() / 60
+        elapsed_minutes = (now() - last_record.finish_time).total_seconds() / 60
         # 如果上一个番茄钟是一组里的最后一个番茄钟, 则需要进行组之间的休息时间判断
         if last_tomato_cnt == 0:
-            if remain_minutes < 20:
-                return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟, 当前为大组之间的休息时间, 剩余{20 - remain_minutes:.2f}分钟\n"
+            if elapsed_minutes < 20:
+                return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟, 当前为大组之间的休息时间, 剩余{20 - elapsed_minutes:.2f}分钟\n"
             else:
-                return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟, 已完成大组之间的休息, 当前进入规划状态, 已持续{remain_minutes - 20:.2f}分钟\n"
+                return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟, 已完成大组之间的休息, 当前进入规划状态, 已持续{elapsed_minutes - 20:.2f}分钟\n"
         
         # 如果不是最后一个番茄钟
-        if remain_minutes < 5:
+        if elapsed_minutes < 5:
             # 休息时间不注入任务名, 该部分信息已经包含在事件列表中
             # 进入这个状态是已经把当前番茄钟的记录写入, 因此无需再+1了
-            return f"正在进行{begin_state}第{last_group_cnt+1}组番茄钟内的第{last_tomato_cnt}个番茄钟, 当前为休息状态, 休息时间剩余{remain_minutes:.2f}分钟\n"
+            return f"正在进行{begin_state}第{last_group_cnt+1}组番茄钟内的第{last_tomato_cnt}个番茄钟, 当前为休息状态, 休息时间剩余{5 - elapsed_minutes:.2f}分钟\n"
         else:
-            return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟内的第{last_tomato_cnt}个番茄钟, 当前进入规划状态, 已持续{remain_minutes - 5:.2f}分钟\n"
+            return f"已完成{begin_state}第{last_group_cnt+1}组番茄钟内的第{last_tomato_cnt}个番茄钟, 当前进入规划状态, 已持续{elapsed_minutes - 5:.2f}分钟\n"
         
     
     def get_tomoto_record_info(self, owner: str, begin_time:datetime) -> Tuple[int, int, Optional[TomatoTaskRecord]]:
