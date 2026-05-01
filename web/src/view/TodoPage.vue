@@ -1,5 +1,5 @@
 <template>
-  <TodoSubmit :enableSubmit="true" @commit="doCommitTodo"></TodoSubmit>
+  <TodoSubmit :enableSubmit="true" @commit="doCommitTodo" :home-path="homePage"></TodoSubmit>
 
   <div class="container">
     <!-- 待办事项模块 -->
@@ -40,9 +40,13 @@ import { byCalcValue, byUpdateTime } from '@/components/item/sort'
 const $router = useRoute()
 // 父Item的Id, 对于主界面, 此属性为undefined, 对于Note页面, 此属性为父Item的ID
 let parent: string | undefined = undefined
+let homePage: string | undefined = undefined
 
 onMounted(() => {
   parent = $router.params.id as string
+  if(parent != undefined) {
+    homePage = "/todo"
+  }
   loadItem()
   loadNote()
   loadIsAdmin()

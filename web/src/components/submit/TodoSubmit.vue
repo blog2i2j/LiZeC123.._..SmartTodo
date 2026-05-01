@@ -33,6 +33,7 @@ import router from '@/router'
 
 const props = defineProps<{
   enableSubmit?: boolean
+  homePath?: string
 }>()
 
 
@@ -42,7 +43,12 @@ const emit = defineEmits<{
 
 function gotoHome() {
   document.title = '待办事项列表'
-  router.push({ path: '/' })
+
+  if (props.homePath !== undefined) {
+    router.push({ path: props.homePath })
+  } else {
+    router.push({ path: '/' })
+  }
 }
 
 const todoContent = ref('')
