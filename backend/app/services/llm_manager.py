@@ -186,7 +186,7 @@ class AssistantManager:
 
     def make_system_prompt(self, owner: str) -> str:
         role_info = self.get_role_info(self.get_role_list(), self.role_keyword)
-        task_table = self.get_task_info(owner)
+        # task_table = self.get_task_info(owner)
 
         return f'''### 角色设定
 
@@ -194,18 +194,13 @@ class AssistantManager:
 
 ### 用户的工作模式
 
-用户采用番茄工作法, 在 工作 -> 休息 -> 规划 三个状态中循环, 每个番茄钟包含25分钟的工作时间, 5分钟的休息之间以及两个番茄钟之间的规划时间. 每4个番茄钟为一个大组, 完成一个大组后有额外的15分钟休息时间. 
+用户采用番茄工作法, 在 工作 -> 休息 -> 规划 三个状态中循环, 每个番茄钟包含25分钟的工作时间, 5分钟的休息时间. 两个番茄钟之间属于规划时间. 每4个番茄钟为一个大组, 完成一个大组后有额外的15分钟休息时间. 
 
 每天的11:30~14:30为午休时间, 17:30~19:00为晚餐时间, 这两个时段为休息状态, 并将全天分割为上午, 下午和晚上. 用户晚上21:00后进入休息状态, 在大约23:00准备睡觉.
 
-### 用户今日规划的待办事项
-{task_table}
-
-> 部分任务(例如打卡)仅需要完成, 但无需番茄钟
-
 ### 关键注意事项
 
-1. 在用户的对话前有系统插入的当前状态信息, 包含当前时间, 番茄钟状态, 任务完成情况等信息.
+1. 在用户的对话前有系统插入的当前状态信息,和用户行为日志.
 2. 当前状态为工作时, 话题围绕当前工作项. 当前状态为休息时, 按照人设和用户对话进行闲聊. 当前状态为规划状态时, 可闲聊并讨论后续任务规划. 
 3. 每次回复需要至少200字
 '''
@@ -213,15 +208,15 @@ class AssistantManager:
     def make_user_prompt(self, prompt: str, start: datetime, owner: str) -> str:        
         content = f"当前时间: {now_str()}\n"
         
-        event_info = self.get_event_info(owner, start)
-        if event_info != "":
-            content += "用户新增的事件记录:\n" + event_info
-                
         # 当前番茄钟状态
         begin_time, begin_state = self.get_tomato_state_begin_time()
         state = self.get_tomato_state(owner=owner, begin_time=begin_time, begin_state=begin_state)
-        if state is not None:
-            content += f"用户番茄钟状态: {state}\n"
+        content += f"番茄钟状态: {state}\n"
+        
+        # 事件信息, 可能没有事件
+        event_info = self.get_event_info(owner, start)
+        if event_info != "":
+            content += "用户新增的事件记录:\n" + event_info
         
         # 用户可以不输入任何内容, 全部使用自动填充的信息
         if prompt != "":
@@ -254,19 +249,19 @@ class AssistantManager:
         it = (role for role in roles if role_keyword in role)
         return next(it, random_role)
 
-    def get_task_info(self, owner:str) -> str:
-        content =  '''
-项目名 | 预计番茄钟数量 | 任务截止时间| 优先级 
-------|--------------|-----------|---------
-'''
-        tasks = self.item_manager.get_tomato_item(owner=owner)
-        for task in tasks:
-            for item in task['children']:
-                expected_tomato = 0 if self.__is_zero_tomoto_task(item["name"]) else item["expected_tomato"]
-                line = f"{item["name"]} | {expected_tomato} | {item["deadline"]} | {item["priority"]}\n"
-                content = content + line
+#     def get_task_info(self, owner:str) -> str:
+#         content =  '''
+# 项目名 | 预计番茄钟数量 | 任务截止时间| 优先级 
+# ------|--------------|-----------|---------
+# '''
+#         tasks = self.item_manager.get_tomato_item(owner=owner)
+#         for task in tasks:
+#             for item in task['children']:
+#                 expected_tomato = 0 if self.__is_zero_tomoto_task(item["name"]) else item["expected_tomato"]
+#                 line = f"{item["name"]} | {expected_tomato} | {item["deadline"]} | {item["priority"]}\n"
+#                 content = content + line
    
-        return content
+#         return content
     
     def __is_zero_tomoto_task(self, name:str) -> bool:
         # 打卡类任务可瞬间完成无需番茄钟.  午间和晚间任务不占用番茄钟

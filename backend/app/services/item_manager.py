@@ -192,7 +192,7 @@ class ItemManager:
     def undo(self, xid: int, owner: str):
         item = self.select_with_authority(xid=xid, owner=owner)
         self._undo(item)
-        add_event_log(self.db, owner, f'回退任务[{item.name}]到待执行列表')
+        add_event_log(self.db, owner, f'用户回退任务[{item.name}]到待执行列表')
         return True
 
     def _undo(self, item: Item):
@@ -204,7 +204,7 @@ class ItemManager:
         item = self.select_with_authority(xid=xid, owner=owner)
         item.expected_tomato += 1
         if item.used_tomato > 0:
-            add_event_log(self.db, owner, f'增加任务[{item.name}]的预计番茄钟数量')
+            add_event_log(self.db, owner, f'用户增加任务[{item.name}]的预计番茄钟数量, 该任务预计需要{item.expected_tomato}个番茄钟, 已完成{item.used_tomato}个番茄钟')
         self.db.flush()
         return item is not None
 
@@ -217,7 +217,8 @@ class ItemManager:
         item.used_tomato += 1
         item.update_time = now()
         self.db.flush()
-        add_event_log(self.db, owner, f'完成番茄钟任务[{item.name}]')
+    
+        add_event_log(self.db, owner, f'用户完成番茄钟任务[{item.name}], 该任务预计需要{item.expected_tomato}个番茄钟, 已完成{item.used_tomato}个番茄钟')
         return True
 
     def finish_used_tomato(self, xid: int, owner: str):
@@ -236,14 +237,14 @@ class ItemManager:
             delta = item.expected_tomato
             item.used_tomato = 1
             item.expected_tomato = 1
-            add_event_log(self.db, owner, f'用户提前标记完成任务[{item.name}]并废弃{delta}个预计的番茄钟')
+            add_event_log(self.db, owner, f'用户标记提前完成任务[{item.name}]并废弃{delta}个预计的番茄钟')
         else:
             # 当前任务规划需要多个番茄钟, 并且已经完成了一部分番茄钟
             # 此时手动点击完成, 则视为放弃原本预计需要的番茄钟, 直接调整为完成状态
             # 例如原本预计4个番茄钟, 已经使用了两个番茄钟, 则直接将预期番茄钟数量调整为2并将任务设置为完成
             delta = item.expected_tomato - item.used_tomato
             item.expected_tomato = item.used_tomato
-            add_event_log(self.db, owner, f'用户提前标记完成任务[{item.name}]并废弃{delta}个预计的番茄钟')
+            add_event_log(self.db, owner, f'用户标记提前完成任务[{item.name}]并废弃{delta}个预计的番茄钟')
         self.db.flush()
 
         for f in self.on_done_event:
@@ -256,7 +257,8 @@ class ItemManager:
         item = self.select_with_authority(xid=xid, owner=owner)
         item.update_time = now()
         item.tomato_type = TomatoType.Today
-        logger.info(f"添加任务到今日任务列表: {item.name}")
+        deadline = item.deadline.strftime("%Y-%m-%d %H:%M:%S") if item.deadline is not None else "未指定"
+        add_event_log(self.db, owner, f'用户添加任务[{item.name}]到今日任务列表, 该任务预计需要{item.expected_tomato}个番茄钟, 已完成{item.used_tomato}个番茄钟, 截止日期为{deadline}, 优先级为{item.priority}')
         self.db.flush()
         return item is not None
 
@@ -359,6 +361,7 @@ class ItemManager:
             item.used_tomato = 0
             item.tomato_type = TomatoType.Today
             item.update_time = now()
+            add_event_log(self.db, item.owner, f'系统自动重置可重复任务[{item.name}]为未完成状态')
             logger.info(f"重置可重复任务: {item.name}")
         self.db.commit()  # 定时器触发任务, 必须commit, 否则操作会被回滚
 
