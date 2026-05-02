@@ -6,7 +6,7 @@ from app.services.config_manager import ConfigManager
 from app.models.base import Base
 from app.services.interpreter import OpInterpreter
 from app.services.item_manager import ItemManager
-from app.services.llm_manager import AssistantManager
+from app.services.llm_manager import AssistantHistoryManager, AssistantManager
 from app.services.task_manager import TaskManager
 from app.services.tomato_manager import TomatoManager, TomatoRecordManager
 from app.tools.gen import generate_token_str
@@ -27,7 +27,8 @@ item_manager = ItemManager(db)
 op_interpreter = OpInterpreter(item_manager)
 tomato_manager = TomatoManager(db, item_manager)
 tomato_record_manager = TomatoRecordManager(db, item_manager)
-assistant_manager = AssistantManager(LLMClient(config_manager), item_manager, tomato_manager, tomato_record_manager)
+history_manager = AssistantHistoryManager(db)
+assistant_manager = AssistantManager(LLMClient(config_manager), item_manager, tomato_manager, tomato_record_manager, history_manager)
 
 # 初始化定时任务
 task_manager = TaskManager()

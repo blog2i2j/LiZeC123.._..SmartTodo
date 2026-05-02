@@ -41,4 +41,4 @@ class ConfigManager:
 
     def get_llm_info(self):
         info = self.config["LLM_INFO"]
-        return info["BASE_URL"], info["API_KEY"]
+        return info["BASE_URL"], info["API_KEY"], info["MODEL_NAME"]

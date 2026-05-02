@@ -1,0 +1,61 @@
+from datetime import datetime
+from typing import Optional
+
+from openai.types.chat import (
+    ChatCompletionAssistantMessageParam,
+    ChatCompletionMessageParam,
+    ChatCompletionSystemMessageParam,
+    ChatCompletionToolMessageParam,
+    ChatCompletionUserMessageParam,
+)
+from sqlalchemy import DateTime, Index, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+from app.models.base import Base
+from app.tools.exception import IllegalArgumentException
+from app.tools.time import now
+
+
+class AssistantType:
+    User = "user"
+    Assistant = "assistant"
+    Tool = "tool"
+
+
+class AssistantHistory(Base):
+    __tablename__ = "assistant_history"
+
+    id: Mapped[int]                     = mapped_column(Integer, primary_key=True, autoincrement=True)
+    role: Mapped[str]                   = mapped_column(String(10), nullable=False)
+    content: Mapped[str]                = mapped_column(Text, nullable=False, default='')
+    create_time: Mapped[datetime]       = mapped_column(DateTime, nullable=False, default=now)
+    system_inject_content: Mapped[str]  = mapped_column(Text, nullable=False, default='')   # 系统自动注入的待办相关信息
+    tool_call_id:Mapped[str]            = mapped_column(String, nullable=False, default='')  # 工具的ID
+    owner: Mapped[str]                  = mapped_column(String(15), nullable=False)
+
+    # 定义联合索引
+    __table_args__ = (
+        # 查询单个用户聊天历史
+        Index('idx_history_owner_time', "owner", "create_time"),
+    )
+
+    def to_openai(self) -> ChatCompletionMessageParam:
+        if self.role == "system":
+            return ChatCompletionSystemMessageParam(content=self.content, role="system")
+        if self.role == "user":
+            content = f"当前时间: {self.create_time.strftime("%Y-%m-%d %H:%M:%S")}\n{self.system_inject_content}\n\n---\n\n{self.content}"
+            return ChatCompletionUserMessageParam(content=content, role="user")
+        if self.role == 'assistant':
+            return ChatCompletionAssistantMessageParam(content=self.content, role='assistant')
+        if self.role == 'tool':
+            return ChatCompletionToolMessageParam(content=self.content, role='tool', tool_call_id=self.tool_call_id)
+        raise IllegalArgumentException(f"unknown role: {self.role}")
+
+    def to_web(self) -> Optional[str]:
+        if self.role in ['system', 'tool']:
+            return None
+        if self.role in "assistant":
+            return self.content
+        if self.role == 'user':
+            return self.content if self.content != "" else "[用户没有任何输入]"

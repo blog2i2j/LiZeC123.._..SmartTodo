@@ -143,11 +143,12 @@ docker build . --file docker/Dockerfile --tag ghcr.io/lizec123/smart-todo
 ```json
   "LLM_INFO": {
     "BASE_URL": "https://api.siliconflow.cn/v1",
-    "API_KEY": "sk-xxx"
+    "API_KEY": "sk-xxx",
+    "MODEL_NAME": "deepseek-ai/DeepSeek-V4-Flash"
   },
 ```
 
-其中`BASE_URL`是模型提供方的接口地址, 该接口需要兼容OpenAI协议, 在大部分模型提供商的文档中可以找到对应的地址. `API_KEY`是调用模型的账号的私钥.
+其中`BASE_URL`是模型提供方的接口地址, `MODEL_NAME`是调用模型的名称, 该接口需要兼容OpenAI协议, 在大部分模型提供商的文档中可以找到对应的地址. `API_KEY`是调用模型的账号的私钥. 
 
 > 重要提示: 本项目本身不提供任何大语言模型能力, 所有相关功能均需调用如上配置的第三方大语言模型接口实现. 因使用过程中需将相关数据发送至对应模型提供商的服务器, **启用相关功能前务必自行评估数据敏感性及数据安全风险**
 

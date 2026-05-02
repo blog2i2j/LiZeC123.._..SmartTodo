@@ -166,15 +166,17 @@ const sendMessage = async () => {
     return
   }
 
-  if (prompt === '/remake') {
+  if (prompt === '/rk') {
     messages.pop()
     await streamChat(prompt)
     return 
   }
 
-  if (prompt.startsWith('/reset')) {
+  if (prompt.startsWith('/rs')) {
     messages.length = 0
-
+    addMessage('user', '[用户重置了会话]')
+    await streamChat(prompt)
+    // TODO:
     const roleKeyword = prompt.replace(/^\/reset/, '')
     resetChat(roleKeyword)
     return 
