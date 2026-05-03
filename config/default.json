@@ -14,7 +14,8 @@
   },
   "LLM_INFO": {
     "BASE_URL": "https://api.siliconflow.cn/v1",
-    "API_KEY": "sk-xxx"
+    "API_KEY": "sk-xxx",
+    "MODEL_NAME": "deepseek-ai/DeepSeek-V4-Flash"
   },
   "VERSION": "3.0.0"
 }
