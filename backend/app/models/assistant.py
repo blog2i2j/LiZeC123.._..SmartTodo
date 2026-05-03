@@ -59,3 +59,14 @@ class AssistantHistory(Base):
             return self.content
         if self.role == 'user':
             return self.content if self.content != "" else "[用户没有任何输入]"
+
+class AssistantStatus(Base):
+    __tablename__ = "assistant_status"
+    
+    id: Mapped[int]                 = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner: Mapped[str]              = mapped_column(String(15), nullable=False)
+    start_time: Mapped[datetime]    = mapped_column(DateTime, nullable=False, default=now) # 用户聊天记录的起始时间
+    
+    
+def make_assistant_status(owner: str, start_time:datetime):
+    return AssistantStatus(owner=owner, start_time=start_time)

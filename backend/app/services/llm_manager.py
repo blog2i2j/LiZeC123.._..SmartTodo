@@ -9,7 +9,7 @@ from openai.types.chat.chat_completion_function_tool_param import ChatCompletion
 import sqlalchemy as sal
 from sqlalchemy.orm import Session, scoped_session
 
-from app.models.assistant import AssistantHistory, AssistantType
+from app.models.assistant import AssistantHistory, AssistantStatus, AssistantType, make_assistant_status
 from app.models.item import Item
 from app.models.tomato import TomatoTaskRecord
 from app.services.event_log_manager import get_event_log_after
@@ -17,7 +17,7 @@ from app.services.item_manager import ItemManager
 from app.services.tomato_manager import TomatoManager, TomatoRecordManager
 from app.tools.llm import LLMClient
 from app.tools.log import logger
-from app.tools.time import get_datetime_from_str, get_hour_str_from, now, parse_deadline_timestamp, today_begin
+from app.tools.time import get_datetime_from_str, get_hour_str_from, now, today_begin
 
 
 
@@ -126,6 +126,29 @@ class AssistantHistoryManager:
         u = self.remove_last_user(owner)
         return a and u
 
+    def get_start_time(self, owner: str) -> datetime:
+        stmt = sal.select(AssistantStatus).where(AssistantStatus.owner == owner)
+        t = self.db.scalar(stmt)
+        if t is None:
+            start_time = today_begin() - timedelta(days=2)
+            t = make_assistant_status(owner=owner, start_time=start_time)
+            self.db.add(t)
+            self.db.flush()
+            self.db.commit()
+        return t.start_time    
+    
+    def reset_start_time(self, owner: str, start_time: datetime) -> bool:
+        stmt = sal.select(AssistantStatus).where(AssistantStatus.owner == owner)
+        t = self.db.scalar(stmt)
+        if t is None:
+            t = make_assistant_status(owner=owner, start_time=start_time)
+            self.db.add(t)
+        else:
+            t.start_time = start_time
+        self.db.flush()
+        self.db.commit()
+        return True
+
     def get_last_chat_time(self, owner: str) ->datetime:
         """获取上一条消息的时间, 如果该用户没有任何消息, 则上一条消息的时间视为今天的开始时间"""
         last = self.select_last_msg(owner)
@@ -142,7 +165,8 @@ class AssistantHistoryManager:
         stmt = sal.select(AssistantHistory).where(AssistantHistory.owner == owner, AssistantHistory.create_time > start_time)
         return self.db.scalars(stmt)
 
-    def get_history(self, owner, start_time: datetime)-> List[ChatCompletionMessageParam]:
+    def get_history(self, owner)-> List[ChatCompletionMessageParam]:
+        start_time = self.get_start_time(owner)
         records = self.select_record(owner, start_time)
         return [SystemPrompt] + [msg.to_openai() for msg in records]
     
@@ -156,12 +180,10 @@ class AssistantManager:
         self.tomato_manager = tomato_manager
         self.tomato_record_manager = tomato_record_manager
         self.history_manager = history_manager
-        self.start_time : Dict[str, datetime] = {}
     
     def generate(self, owner: str, /, enable_tools=False) -> Generator[str, Any, None]:
         """流式生成回复：后台消费 LLM 流并保存，前台推送给客户端"""
-        start_time = self.get_start_time(owner)
-        history = self.history_manager.get_history(owner, start_time)
+        history = self.history_manager.get_history(owner)
         if enable_tools:
             print("进入包含工具的分支")
             tool_desc, tool_map = self.make_tools(owner)
@@ -188,11 +210,6 @@ class AssistantManager:
             content = "".join(full_answer)
             self.history_manager.add_assistant_prompt(content, owner)
     
-    def get_start_time(self, owner: str) -> datetime:
-        if owner not in self.start_time:
-            self.start_time[owner] = today_begin() - timedelta(days=2)
-        
-        return self.start_time[owner]
 
     def make_tools(self, owner:str) -> Tuple[Iterable[ChatCompletionToolUnionParam], Dict[str, Callable[[str], str]]]: 
         def create_f(arg_json:str) -> str:
@@ -231,7 +248,7 @@ class AssistantManager:
         return self.chat(prompt, owner)
     
     def reset(self, owner: str, role_keyword: str = '') -> Generator[str, Any, None]:
-        self.start_time[owner] = now()
+        self.history_manager.reset_start_time(owner=owner, start_time=now())
         role_info = self.make_replace_role_prompt(role_keyword)
         inject = self.make_user_inject_content(today_begin(), owner) # 操作信息要从今天开始的时间读取
         content = inject  + "\n\n---\n\n" + role_info
@@ -383,14 +400,14 @@ class AssistantManager:
                   
 
     def get_web_history(self, owner:str) -> List[str]:
-        start_time = self.get_start_time(owner)
+        start_time = self.history_manager.get_start_time(owner)
         record = self.history_manager.select_record(owner, start_time)
         msg = [msg.to_web() for msg in record]
         return [m for m in msg if m is not None]
         
     
     def dump_history(self, owner:str) -> Generator[str, Any, None]:
-        start_time = self.get_start_time(owner)
+        start_time = self.history_manager.get_start_time(owner)
         record = self.history_manager.select_record(owner, start_time)
         
         for item in record:
