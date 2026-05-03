@@ -2,8 +2,7 @@
 <template>
   <div class="chat-container">
     <div class="chat-history" ref="chatHistoryRef">
-      <div v-for="(message, index) in messages" :key="index" 
-           :class="['message', message.role]">
+      <div v-for="(message, index) in messages" :key="index" :class="['message', message.role]">
         <div class="message-content">
           <!-- 流式消息显示 -->
           <span v-if="message.isStreaming" class="streaming-text">
@@ -14,19 +13,15 @@
         </div>
       </div>
     </div>
-    
+
     <div class="input-area">
-      <textarea 
-        v-model="inputText" 
-        @keydown.enter.prevent="sendMessage"
-        placeholder="输入消息..."
-        :disabled="isLoading"
-      ></textarea>
+      <textarea v-model="inputText" @keydown.enter.prevent="sendMessage" placeholder="输入消息..."
+        :disabled="isLoading"></textarea>
       <button @click="sendMessage" :disabled="isLoading">
         {{ isLoading ? '生成中...' : '发送' }}
       </button>
     </div>
-    
+
     <div v-if="error" class="error">{{ error }}</div>
   </div>
 </template>
@@ -67,7 +62,7 @@ const updateLastMessage = (content: string, isStreaming = false) => {
 // 流式API调用
 const streamChat = async (prompt: string) => {
   controller = new AbortController()
-  
+
   try {
     const response = await fetch('/api/stream/assistant/chat', {
       method: 'POST',
@@ -94,32 +89,32 @@ const streamChat = async (prompt: string) => {
 
     while (true) {
       const { done, value } = await reader.read()
-      
+
       if (done) break
-      
+
       buffer += decoder.decode(value, { stream: true })
-      
+
       // 解析SSE格式
       const lines = buffer.split('\n\n')
       buffer = lines.pop() || ''  // 保留未完成的数据
-      
+
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const dataStr = line.substring(6)
           if (dataStr === '[DONE]') continue
-          
+
           try {
             const data = JSON.parse(dataStr)
-            
+
             if (data.error) {
               error.value = data.error
               break
             }
-            
+
             if (data.text) {
               updateLastMessage(data.text, !data.done)
             }
-            
+
             if (data.done) {
               const lastMsg = messages[messages.length - 1]
               if (lastMsg) {
@@ -146,7 +141,7 @@ const streamChat = async (prompt: string) => {
 // 发送消息
 const sendMessage = async () => {
   if (!inputText.value.trim() || isLoading.value) return
-  
+
   let prompt = inputText.value.trim()
   inputText.value = ''
   error.value = ''
@@ -169,20 +164,17 @@ const sendMessage = async () => {
   if (prompt === '/rk') {
     messages.pop()
     await streamChat(prompt)
-    return 
+    return
   }
 
   if (prompt.startsWith('/rs')) {
     messages.length = 0
     addMessage('user', '[用户重置了会话]')
     await streamChat(prompt)
-    // TODO:
-    const roleKeyword = prompt.replace(/^\/reset/, '')
-    resetChat(roleKeyword)
-    return 
+    return
   }
 
-  if (prompt.startsWith("/replace " )) {
+  if (prompt.startsWith("/rc ")) {
     messages.pop()
     messages.pop()
     // 添加替换后的用户消息
@@ -196,36 +188,32 @@ const sendMessage = async () => {
     messages.pop()
     messages.pop()
     deleteLastChat()
-    return 
+    return
   }
-  
+
   // 添加用户消息
   addMessage('user', prompt)
   await streamChat(prompt)
 }
 
+interface AssistantMsg {
+  role: 'user' | 'assistant'
+  msg: string
+}
+
+
 function loadHistory() {
-    axios.post<string[]>('assistant/history', {}).then(res => {
-      messages.length = 0
-      for(let i=0; i < res.data.length; i++) {
-        const data = res.data[i]
-        if( i % 2== 0)  {
-          addMessage("user", data)
-        } else {
-          addMessage("assistant", data)
-        }
-      }
+  axios.post<AssistantMsg[]>('assistant/history', {}).then(res => {
+    messages.length = 0
+    for (let i = 0; i < res.data.length; i++) {
+      const data = res.data[i]
+      addMessage(data.role, data.msg)
+    }
   })
 }
 
 function deleteLastChat() {
   axios.post('assistant/delete', {}).then(_ => {
-    isLoading.value = false
-  })
-}
-
-function resetChat(roleId: string) {
-    axios.post('assistant/reset', {"keyword": roleId}).then(_ => {
     isLoading.value = false
   })
 }
@@ -237,7 +225,7 @@ const stopGeneration = () => {
     controller = null
   }
   isLoading.value = false
-  
+
   // 标记最后一条消息为非流式
   if (messages.length > 0) {
     const lastMsg = messages[messages.length - 1]
@@ -268,13 +256,13 @@ watch(messages, () => {
 // 键盘快捷键
 onMounted(() => {
   document.title = '私人助理'
-  
+
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && isLoading.value) {
       stopGeneration()
     }
   }
-  
+
   window.addEventListener('keydown', handleKeyDown)
   onUnmounted(() => window.removeEventListener('keydown', handleKeyDown))
   loadHistory()
@@ -326,8 +314,15 @@ onMounted(() => {
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
 }
 
 .input-area {

@@ -399,11 +399,10 @@ class AssistantManager:
         return last_group_cnt, last_tomato_cnt, tomato_records[-1]
                   
 
-    def get_web_history(self, owner:str) -> List[str]:
+    def get_web_history(self, owner:str) -> List[Dict]:
         start_time = self.history_manager.get_start_time(owner)
         record = self.history_manager.select_record(owner, start_time)
-        msg = [msg.to_web() for msg in record]
-        return [m for m in msg if m is not None]
+        return [{'role': msg.role, 'msg': msg.to_web()} for msg in record if msg.role in [AssistantType.User, AssistantType.Assistant]]
         
     
     def dump_history(self, owner:str) -> Generator[str, Any, None]:
